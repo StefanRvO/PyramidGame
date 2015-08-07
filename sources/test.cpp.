@@ -1,0 +1,23 @@
+#include "../headers/Server.h"
+#include "../headers/Client.h"
+#include <unistd.h>
+
+int main()
+{
+  client_settings c_set;
+  c_set.port =8585;
+  c_set.server_adress = "127.0.0.1";
+	c_set.nick_name = "testnick" ;
+	c_set.he = gethostbyname(c_set.server_adress.c_str());
+  server_settings s_set;
+  s_set.percent_flipped = 8;
+  s_set.base_size = 5;
+  s_set.port = 8585;
+  Server server(s_set);
+  Client *client = new Client(c_set);
+  client->send_hello();
+  while(1)
+  {
+    usleep(100000);
+  }
+}

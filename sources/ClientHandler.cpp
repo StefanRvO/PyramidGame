@@ -1,12 +1,14 @@
 #include "../headers/ClientHandler.h"
 #include <unistd.h>
 #include <iostream>
+#include <arpa/inet.h>
 #define SERVER 0
-ClientHandler::ClientHandler(int id_, int client_socket_, struct sockaddr client_addr_)
+ClientHandler::ClientHandler(int id_, int client_socket_, struct sockaddr_in client_addr_)
 {
   id = id_;
   client_socket = client_socket_;
   client_addr = client_addr_;
+  client_thread_handle = std::thread(client_handler_thread_wrapper, this);
 }
 
 void ClientHandler::disconnect()
@@ -23,18 +25,24 @@ void ClientHandler::client_handler_thread()
   int num;
   network_message message;
   int pointeroffset = 0;
+  char network_str[100];
+
+  inet_ntop(AF_INET, &client_addr.sin_addr, network_str, sizeof(network_str));
+  std::cout  << " connection from " << network_str
+    << ":" << client_addr.sin_port << std::endl;
   while(!stop)
   {
     //get message type
-    if ((num = read(client_socket, ((char *)&message)+pointeroffset, sizeof(message)-pointeroffset))== -1)
+    if ((num = read(client_socket, ((char *)&message)+pointeroffset, sizeof(network_message)-pointeroffset)) == -1)
     {
-        perror("recv error");
+      std::cout <<"recv error" << std::endl;
         exit(1);
     }
     else if(num == 0)
     { //disconnected
       connected = false;
       stop = true;
+      std::cout << "disconnected" << std::endl;
       break;
     }
     pointeroffset = (pointeroffset + num) % sizeof(message);
@@ -43,7 +51,7 @@ void ClientHandler::client_handler_thread()
       switch(message.type)
       {
         case message_type::hello:
-          if(!handle_hello() || !send_id())
+          if(!handle_hello(message) || !send_id())
           {
             connected = false;
             stop = true;
@@ -64,37 +72,36 @@ void ClientHandler::client_handler_thread()
         case message_type::give_id:
 
         break;
-
       }
     }
   }
   close(client_socket);
 }
 
-bool ClientHandler::handle_hello()
+bool ClientHandler::handle_hello(network_message msg)
 {
   //recieve message
   int num;
-  hello_message message;
+  char *name = new char[msg.value];
   int pointeroffset = 0;
   do
   {
-    if ((num = read(client_socket, ((char *)&message)+pointeroffset, sizeof(hello_message)-pointeroffset))== -1)
+    if ((num = read(client_socket, name+pointeroffset, msg.value-pointeroffset))== -1)
     {
-        perror("recv error");
+        std::cout <<"recv error" << std::endl;
         exit(1);
     }
     else if(num == 0)
     { //disconnected
+      std::cout <<"Disconnected" << std::endl;
       return false;
     }
-    pointeroffset = (pointeroffset + num) % sizeof(hello_message);
-
-  } while(pointeroffset == 0);
-
+    pointeroffset = (pointeroffset + num) % msg.value;
+  } while(pointeroffset != 0);
   nick_mtx.lock();
-  nick = std::string(message.nick);
+  nick = std::string(name);
   nick_mtx.unlock();
+  delete name;
   connected = true;
   return true;
 }
@@ -111,4 +118,11 @@ bool ClientHandler::send_id()
   }
 
   return 1;
+}
+
+
+
+void client_handler_thread_wrapper(ClientHandler *CHandler)
+{
+  CHandler->client_handler_thread();
 }

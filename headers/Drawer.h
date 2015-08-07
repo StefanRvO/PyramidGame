@@ -7,7 +7,8 @@
 #include <SDL2/SDL2_gfxPrimitives.h>
 #include <SDL2/SDL_image.h>
 #include <mutex>
-#include "../headers/Server.h"
+#include "Server.h"
+#include "Client.h"
 #define WINDOWSIZE_X 750
 #define WINDOWSIZE_Y 600
 #define DRAWFPS 20
@@ -32,33 +33,27 @@ enum class server_menu_state
 {
   select_options,
   client_connect,
-  deal_cards
 };
 
 enum class client_menu_state
 {
-  connecting,
-  deal_cards
+  select_options,
+	validate_hostname,
+	connect,
+	connected,
 };
-
-
-enum class client_state
-{
-  game,
-  guess_cards
-};
-
-
 
 class drawer
 {
   private:
 		server_settings server_settings_ = {50, 5, 8585};
+
     game_state game_state_ = game_state::main_menu;
 		server_menu_state server_menu_state_ = server_menu_state::select_options;
-		Server *server;
-/*    client_menu_state client_menu_state_ = client_menu_state::connecting;
-    client_state client_state_ = client_state::game; */
+		Server *server = NULL;
+		Client *client = NULL;
+    client_menu_state client_menu_state_ = client_menu_state::select_options;
+		client_settings client_settings_ = {8585, "localhost", "myNick", NULL};
     SDL_Window *window;
     SDL_Renderer* renderer;
     Timer timer;
@@ -68,6 +63,9 @@ class drawer
 		int server_menu();
 		int server_select_options();
 		int server_client_connect();
+		int client_validate_hostname();
+		int client_menu();
+		int client_select_options();
     void showscreen();
   public:
     drawer();

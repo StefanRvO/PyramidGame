@@ -5,36 +5,30 @@
 #include <unistd.h>
 #include <iostream>
 #define BACKLOG 100
+
+void error(const char *msg)
+{
+    perror(msg);
+    exit(1);
+}
+
 Server::Server(server_settings settings)
 {
   server_settings_ = settings;
-  if((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-  {
-    fprintf(stderr, "Socket failure!!\n");
-    exit(1);
-  }
-  int yes = 1;
-  if(setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
-  {
-    perror("error in setsockopt");
-    exit(1);
-  }
-  memset(&server_addr, 0, sizeof(server_addr));
-
+  server_socket = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_socket < 0)
+     error("ERROR opening socket");
+  bzero((char *) &server_addr, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(server_settings_.port);
   server_addr.sin_addr.s_addr = INADDR_ANY;
-  if((bind(server_socket, (struct sockaddr *) &server_addr, sizeof(struct sockaddr))) == -1)
-  {
-    fprintf(stderr, "Binding Failure\n");
-    exit(1);
-  }
+  server_addr.sin_port = htons(server_settings_.port);
 
-  if ((listen(server_socket, BACKLOG))== -1)
-  {
-    fprintf(stderr, "Listening Failure\n");
-    exit(1);
-  }
+  if (bind(server_socket, (struct sockaddr *) &server_addr,
+           sizeof(server_addr)) < 0)
+           error("ERROR on binding");
+
+  listen(server_socket,5);
+  size = sizeof(client_addr);
   server_thread_handle = std::thread(server_thread_wrapper, this);
 }
 
@@ -92,14 +86,11 @@ void Server::server_thread()
 void Server::connect_client()
 {
   fd_set rfds;
-  struct timeval tv;
-  tv.tv_sec = 1;
-  tv.tv_usec = 0;
   FD_ZERO(&rfds);
-  FD_SET(0, &rfds);
+  FD_SET(server_socket, &rfds);
 
 
-  int retval = select(server_socket, &rfds, NULL, NULL, &tv);
+  int retval = select(server_socket + 1, &rfds, NULL, NULL, NULL);
   if(retval == -1)
   {
     std::cout << "Error in select()" << std::endl;
@@ -107,14 +98,12 @@ void Server::connect_client()
   else if(retval)
   {
     //Got a connection
-    socklen_t size = sizeof(struct sockaddr_in);
-    int client_socket;
-    struct sockaddr client_addr;
-    if((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &size) == -1))
-    {
-      perror("error in accept");
-      exit(0);
-    }
+    client_socket = accept(server_socket,
+                (struct sockaddr *) &client_addr,
+                &size);
+    if (client_socket < 0)
+         error("ERROR on accept");
+
     //Add client to vector
     clients_mtx.lock();
     clients.push_back(new ClientHandler(client_id_counter++, client_socket, client_addr));

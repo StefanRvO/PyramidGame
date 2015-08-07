@@ -36,8 +36,9 @@ class Server
   private:
 		std::mutex clients_mtx;
     std::vector<ClientHandler *> clients;
-    struct sockaddr_in server_addr;
-    int server_socket;
+		socklen_t size;
+		struct sockaddr_in server_addr, client_addr;
+    int server_socket, client_socket;
     server_state server_state_ = server_state::get_clients;
 		bool stop = false;
 		std::thread server_thread_handle;

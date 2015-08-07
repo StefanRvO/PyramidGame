@@ -6,27 +6,24 @@
 #include <thread>
 #include <mutex>
 
+#define NEW_CLIENT -1
 
 enum message_type
 {
 	new_card,
 	accepted,
 	denied,
-	hello,
 	i_have_card,
-  give_id
-};
+  give_id,
+	hello,
 
-struct hello_message
-{
-	char nick[100];
 };
 
 struct network_message
 {
-  int origin; //where is this message from? clients have numbers 1.., server is 0
+  int origin; //where is this message from? clients have numbers 1.., server is 0, new client is -1
   message_type type; //message type
-  int value; //indicates the lenght of the following message
+  unsigned int value; //indicates the lenght of the following message
 };
 
 class ClientHandler
@@ -34,7 +31,7 @@ class ClientHandler
   private:
      int client_socket;
      socklen_t size;
-     struct sockaddr client_addr;
+     struct sockaddr_in client_addr;
      std::thread client_thread_handle;
      bool connected = 0;
      bool ready = 0;
@@ -42,11 +39,11 @@ class ClientHandler
      bool stop = false;
      std::string nick;
      std::mutex nick_mtx;
-     bool handle_hello();
+     bool handle_hello(network_message);
      bool send_id();
   public:
     void client_handler_thread();
-    ClientHandler(int id_, int client_socket_, struct sockaddr client_addr_);
+    ClientHandler(int id_, int client_socket_, struct sockaddr_in client_addr_);
     bool isReady();
     bool isConnected();
     void disconnect();

@@ -83,13 +83,14 @@ void drawer::loop()
             game_state_ = game_state::server_menu;
           else if(decision == main_menu_options::client)
             game_state_ = game_state::client_menu;
+          else if(decision == main_menu_options::quit) return;
           else
             std::cout << "ERROR in main_menu." << std::endl;
         break;
       }
       case game_state::server_menu:
       {
-        int decision = server_menu();
+        auto decision = server_menu();
         if(decision == 1) // back
         {
           game_state_ = game_state::main_menu;
@@ -101,8 +102,14 @@ void drawer::loop()
         break;
       }
       case game_state::client_menu:
-
+      {
+        auto decision = client_menu();
+        if(decision == 1) //back
+          game_state_ = game_state::main_menu;
+        else if(decision == 2) //forward
+          game_state_ = game_state::client;
         break;
+      }
       case game_state::server:
 
         break;
@@ -113,6 +120,199 @@ void drawer::loop()
   }
 }
 
+int drawer::client_menu()
+{
+  while(!stop)
+  {
+    switch (client_menu_state_)
+    {
+      case client_menu_state::select_options:
+      {
+        auto decision = client_select_options();
+        if(decision == 1) // backward
+          return 1;
+        else if(decision == 2) // forward
+        {
+          client_menu_state_ = client_menu_state::validate_hostname;
+        }
+        break;
+      }
+      case client_menu_state::validate_hostname:
+      {
+        auto decision = client_validate_hostname();
+        if(decision == 1) // forward
+          client_menu_state_ = client_menu_state::connect;
+        else if(decision == 2) // backward
+        {
+          client_menu_state_ = client_menu_state::select_options;
+        }
+        break;
+      }
+
+      case client_menu_state::connect:
+      {
+        client = new Client(client_settings_);
+        if(client->send_hello())
+        {
+          client_menu_state_ = client_menu_state::connected;
+        }
+        else
+        {
+          delete client;
+          client_menu_state_ = client_menu_state::select_options;
+        }
+        break;
+      }
+      case client_menu_state::connected:
+        showscreen();
+        break;
+    }
+  }
+  return 0;
+}
+
+int drawer::client_validate_hostname()
+{
+  SDL_SetRenderDrawColor(renderer,255,255,255,255);
+  SDL_RenderClear(renderer);
+  int w, h;
+  SDL_GetWindowSize(window,&w,&h);
+  TextDrawer TDrawer_small("FreeSans.ttf", h/40);
+  TDrawer_small.DrawText(renderer, "validating hostname...", w/10 * 0.1, h/10 * 3.7, 0, 0, 0, 255);
+  showscreen();
+  if((client_settings_.he = gethostbyname(client_settings_.server_adress.c_str())) == NULL)
+  {
+    return 2;
+  }
+  return 1;
+
+}
+int drawer::client_select_options()
+{
+
+  static void *selected_box = NULL;
+  SDL_SetRenderDrawColor(renderer,255,255,255,255);
+  SDL_RenderClear(renderer);
+  int w, h;
+  SDL_GetWindowSize(window,&w,&h);
+  TextDrawer TDrawer_small("FreeSans.ttf", h/40);
+  TextDrawer TDrawer_verySmall("FreeSans.ttf", h/30);
+
+  std::string port_str = std::to_string(client_settings_.port);
+  std::vector<SDL_Rect> boxes;
+  SDL_SetRenderDrawColor(renderer,255,100,100,255);
+
+  TDrawer_verySmall.DrawText(renderer, "port", w/10 * 0.1, h/10 * 3.7, 0, 0, 0, 255);
+  TDrawer_verySmall.DrawText(renderer, "server adress / domain", w/10 * 0.1, h/10 * 4.7, 0, 0, 0, 255);
+  TDrawer_verySmall.DrawText(renderer, "Nick_name", w/10 * 0.1, h/10 * 5.75, 0, 0, 0, 255);
+
+  boxes.push_back(TDrawer_small.DrawText(renderer, port_str.c_str(), w/10 * 0.1, h/10 * 4.3, 100, 100, 100, 255, 1));
+
+  //size selection box
+  boxes.push_back(TDrawer_small.DrawText(renderer, client_settings_.server_adress.c_str(), w/10 * .1, h/10 * 5.2, 100, 100, 100, 255, 1));
+
+  //percentage selection box
+  boxes.push_back(TDrawer_small.DrawText(renderer, client_settings_.nick_name.c_str(), w/10 * .1, h/10 * 6.4, 100, 100, 100, 255, 1));
+
+  //backward
+  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Back", w/10 * 1, h/10 * 8, 100, 100, 100, 255, 1));
+
+  //forward
+  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Connect", w/10 * 9, h/10 * 8, 100, 100, 100, 255, 1));
+
+  SDL_Event event;
+  while(SDL_PollEvent(&event))
+  {
+      switch (event.type)
+      {
+          case SDL_QUIT:
+              stop = true;
+              return -1;
+          case SDL_MOUSEBUTTONDOWN:
+          {
+              int i = 0;
+              bool inBox = 0;
+              for(auto &rect : boxes)
+              {
+                int x = event.button.x;
+                int y = event.button.y;
+                if (isInsideBox(rect, x, y))
+                {
+                  if(i == 0)
+                  {
+                    selected_box = &client_settings_.port;
+                    SDL_StopTextInput();
+                  }
+                  else if (i == 1)
+                  {
+                    selected_box = &client_settings_.server_adress;
+                    SDL_StartTextInput();
+                  }
+                  else if (i == 2)
+                  {
+                    selected_box = &client_settings_.nick_name;
+                    SDL_StartTextInput();
+                  }
+                  else if (i == 3)
+                  {
+                    SDL_StopTextInput();
+                    return 1;
+                  }
+                  else if(i == 4)
+                  {
+                    SDL_StopTextInput();
+                    return 2;
+                  }
+                  inBox = 1;
+                }
+                i++;
+              }
+              if(!inBox)
+              {
+                selected_box = NULL;
+                SDL_StopTextInput();
+              }
+              break;
+            }
+            case SDL_KEYDOWN:
+                if(event.key.keysym.sym >= '0' && event.key.keysym.sym <= '9')
+                {
+                  if(selected_box == &client_settings_.port)
+                  {
+                    client_settings_.port *= 10;
+                    client_settings_.port += event.key.keysym.sym - '0';
+                  }
+                }
+                else if(event.key.keysym.sym == SDLK_BACKSPACE)
+                {
+                  if(selected_box ==  &client_settings_.port)
+                    client_settings_.port /=10;
+                  else if(selected_box == &client_settings_.server_adress || selected_box == &client_settings_.nick_name)
+                  {
+                    if(((std::string *)selected_box)->size())
+                      ((std::string *)selected_box)->pop_back();
+                  }
+                }
+
+            break;
+
+            case SDL_TEXTINPUT:
+              if(selected_box == &client_settings_.server_adress || selected_box == &client_settings_.nick_name)
+              {
+                ((std::string *)selected_box)->append(event.text.text);
+              }
+            break;
+            case SDL_TEXTEDITING:
+              if(selected_box == &client_settings_.server_adress || selected_box == &client_settings_.nick_name)
+              {
+                ((std::string *)selected_box)->append(event.edit.text);
+              }
+            break;
+            }
+    }
+    showscreen();
+    return 0;
+}
 int drawer::server_menu()
 {
   while(!stop)
@@ -135,7 +335,7 @@ int drawer::server_menu()
       {
         auto decision = server_client_connect();
         if(decision == 1) // forward
-          server_menu_state_ = server_menu_state::deal_cards;
+          return 1;
         else if(decision == 2) // backward
         {
           server_menu_state_ = server_menu_state::select_options;
@@ -143,22 +343,11 @@ int drawer::server_menu()
         }
         break;
       }
-      case server_menu_state::deal_cards:
-      {/*
-        auto success = server_deal_cards();
-        if(success == 1) // forward
-          return 1;
-        else if(decision == 2) // backward
-        {
-          std::cout << "ERROR WHILE DEALING CARDS" << std::endl;
-          return 2;
-        }*/
-      break;
-      }
     }
   }
   return 0;
 }
+
 
 int drawer::server_select_options()
 {
@@ -218,6 +407,7 @@ int drawer::server_select_options()
                   if(i == 0)
                   {
                     selected_box = &server_settings_.port;
+
                   }
                   else if (i == 1)
                   {
@@ -242,63 +432,14 @@ int drawer::server_select_options()
               break;
             }
             case SDL_KEYDOWN:
-              switch(event.key.keysym.sym)
+              if(event.key.keysym.sym >= '0' && event.key.keysym.sym <= '9')
               {
-                case SDLK_0:
-                  *selected_box *=10;
-                  *selected_box += 0;
-                break;
-
-                case SDLK_1:
-                  *selected_box *=10;
-                  *selected_box += 1;
-                break;
-
-                case SDLK_2:
-                  *selected_box *=10;
-                  *selected_box += 2;
-                break;
-
-                case SDLK_3:
-                  *selected_box *=10;
-                  *selected_box += 3;
-                break;
-
-                case SDLK_4:
-                  *selected_box *=10;
-                  *selected_box += 4;
-                break;
-
-                case SDLK_5:
-                  *selected_box *=10;
-                  *selected_box += 5;
-                break;
-
-                case SDLK_6:
-                  *selected_box *=10;
-                  *selected_box += 6;
-                break;
-                case SDLK_7:
-                  *selected_box *=10;
-                  *selected_box += 7;
-                break;
-
-                case SDLK_8:
-                  *selected_box *=10;
-                  *selected_box += 8;
-                break;
-
-                case SDLK_9:
-                  *selected_box *=10;
-                  *selected_box += 9;
-                break;
-
-                case SDLK_BACKSPACE:
-                  *selected_box /=10;
-                break;
-
+                *selected_box *=10;
+                *selected_box += event.key.keysym.sym - '0';
               }
-              break;
+              else if(event.key.keysym.sym == SDLK_BACKSPACE)
+                *selected_box /=10;
+            break;
       }
 
   }
