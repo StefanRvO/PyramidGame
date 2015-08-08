@@ -2,12 +2,25 @@
 #include <unistd.h>
 #include <iostream>
 #include <arpa/inet.h>
-#define SERVER 0
-ClientHandler::ClientHandler(int id_, int client_socket_, struct sockaddr_in client_addr_)
+#include "../headers/Server.h"
+
+void ClientHandler::disconnected()
+{
+  stop = true;
+  connected = false;
+  ((Server *)server_ptr)->send_clientlist();
+}
+void ClientHandler::connection_start()
+{
+  connected = true;
+  ((Server *)server_ptr)->send_clientlist();
+}
+ClientHandler::ClientHandler(int id_, int client_socket_, struct sockaddr_in client_addr_, void *server_ptr_)
 {
   id = id_;
   client_socket = client_socket_;
   client_addr = client_addr_;
+  server_ptr = server_ptr_;
   client_thread_handle = std::thread(client_handler_thread_wrapper, this);
 }
 
@@ -36,12 +49,11 @@ void ClientHandler::client_handler_thread()
     if ((num = read(client_socket, ((char *)&message)+pointeroffset, sizeof(network_message)-pointeroffset)) == -1)
     {
       std::cout <<"recv error" << std::endl;
-        exit(1);
+      disconnected();
     }
     else if(num == 0)
     { //disconnected
-      connected = false;
-      stop = true;
+      disconnected();
       std::cout << "disconnected" << std::endl;
       break;
     }
@@ -53,8 +65,7 @@ void ClientHandler::client_handler_thread()
         case message_type::hello:
           if(!handle_hello(message) || !send_id())
           {
-            connected = false;
-            stop = true;
+            disconnected();
           }
         break;
         case message_type::new_card:
@@ -70,6 +81,9 @@ void ClientHandler::client_handler_thread()
 
         break;
         case message_type::give_id:
+
+        break;
+        case message_type::client_list:
 
         break;
       }
@@ -89,7 +103,7 @@ bool ClientHandler::handle_hello(network_message msg)
     if ((num = read(client_socket, name+pointeroffset, msg.value-pointeroffset))== -1)
     {
         std::cout <<"recv error" << std::endl;
-        exit(1);
+        return false;
     }
     else if(num == 0)
     { //disconnected
@@ -102,27 +116,60 @@ bool ClientHandler::handle_hello(network_message msg)
   nick = std::string(name);
   nick_mtx.unlock();
   delete name;
-  connected = true;
+  connection_start();
   return true;
 }
 
 bool ClientHandler::send_id()
 {
+  write_mtx.lock();
   network_message message;
   message.origin = SERVER;
   message.type = message_type::give_id;
   message.value = id;
   if ((write(client_socket, &message, sizeof(network_message)) == -1))
   {
+    write_mtx.unlock();
     return 0;
   }
-
+  write_mtx.unlock();
   return 1;
 }
 
+void ClientHandler::send_clientlist(std::vector<client_info> &client_list)
+{
+  write_mtx.lock();
+  network_message message;
+  message.origin = SERVER;
+  message.type = message_type::client_list;
+  message.value = client_list.size() * sizeof(client_info);
+  if ((write(client_socket, &message, sizeof(network_message)) == -1))
+  {
+    disconnected();
+  }
+  if ((write(client_socket, client_list.data(), message.value) == -1))
+  {
+    disconnected();
+  }
 
+  write_mtx.unlock();
+}
 
 void client_handler_thread_wrapper(ClientHandler *CHandler)
 {
   CHandler->client_handler_thread();
+}
+
+bool ClientHandler::isConnected()
+{
+  return connected;
+}
+
+std::string ClientHandler::getNick()
+{
+  std::string tmp_str;
+  nick_mtx.lock();
+  tmp_str = nick;
+  nick_mtx.unlock();
+  return tmp_str;
 }

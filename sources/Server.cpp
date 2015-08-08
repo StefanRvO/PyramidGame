@@ -4,7 +4,13 @@
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
+#include <algorithm>
 #define BACKLOG 100
+
+bool client_info_sort( client_info &ci_1, client_info &ci_2)
+{
+  return ci_1.id  < ci_2.id;
+}
 
 void error(const char *msg)
 {
@@ -106,7 +112,41 @@ void Server::connect_client()
 
     //Add client to vector
     clients_mtx.lock();
-    clients.push_back(new ClientHandler(client_id_counter++, client_socket, client_addr));
+    clients.push_back(new ClientHandler(client_id_counter++, client_socket, client_addr, this));
     clients_mtx.unlock();
   }
+}
+
+std::vector<client_info> Server::getClientList()
+{
+  std::vector<client_info> client_list;
+  clients_mtx.lock();
+  for(auto client : clients)
+  {
+    if(client->isConnected())
+    {
+      client_info tmp;
+      strncpy(tmp.nick, client->getNick().c_str(), sizeof(tmp.nick));
+      tmp.id = client->id;
+      tmp.nick[sizeof(tmp.nick) - 1] = '\0';
+      client_list.push_back(tmp);
+    }
+  }
+  clients_mtx.unlock();
+  sort(client_list.begin(), client_list.end(), client_info_sort);
+  return client_list;
+}
+
+void Server::send_clientlist()
+{
+  auto client_list = getClientList();
+  clients_mtx.lock();
+  for(auto client : clients)
+  {
+    if(client->isConnected())
+    {
+      client->send_clientlist(client_list);
+    }
+  }
+  clients_mtx.unlock();
 }

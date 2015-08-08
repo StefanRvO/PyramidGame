@@ -66,6 +66,7 @@ class drawer
 		int client_validate_hostname();
 		int client_menu();
 		int client_select_options();
+		int client_connected();
     void showscreen();
   public:
     drawer();

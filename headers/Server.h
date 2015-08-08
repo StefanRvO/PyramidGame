@@ -29,8 +29,6 @@ enum class server_state
 };
 
 
-
-
 class Server
 {
   private:
@@ -46,6 +44,8 @@ class Server
 		void connect_client();
 		int client_id_counter = 1;
   public:
+		void send_clientlist();
+		std::vector<client_info> getClientList();
     Server(server_settings settings);
 		void server_thread();
     ~Server();

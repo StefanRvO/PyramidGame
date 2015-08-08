@@ -164,13 +164,53 @@ int drawer::client_menu()
         break;
       }
       case client_menu_state::connected:
-        showscreen();
+      {
+        auto decision = client_connected();
+        if(decision == 1) // forward
+          {}
+        else if(decision == 2) // backward
+        {
+          delete client;
+          client_menu_state_ = client_menu_state::select_options;
+        }
         break;
+      }
     }
   }
   return 0;
 }
+int drawer::client_connected()
+{
+  SDL_SetRenderDrawColor(renderer,255,255,255,255);
+  SDL_RenderClear(renderer);
+  int w, h;
+  SDL_GetWindowSize(window,&w,&h);
+  TextDrawer TDrawer_small("FreeSans.ttf", h/40);
+  TDrawer_small.DrawTextCenter(renderer, "Connected", w/10 * 5, h/10 * 3, 100, 100, 100, 255);
+  SDL_SetRenderDrawColor(renderer,127,200,200,255);
 
+  std::vector<SDL_Rect> boxes;
+  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Cancel", w/10 * 1, h/10 * 9, 100, 100, 100, 255,1));
+  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Start", w/10 * 9, h/10 * 9, 100, 100, 100, 255,1));
+  //print connected clients
+  auto client_vector = client->getClientList();
+  for(unsigned int j = 0; j < client_vector.size(); j++ )
+  {
+    TDrawer_small.DrawText(renderer, client_vector[j].nick, w/10 * 0.5, h/10 * 2 + h/20 * j, 100 + j * 10, 200 - j * 10, 100, 255);
+  }
+  int clickedBox = e_handler->detectClickInBox(boxes);
+  showscreen();
+
+
+  if(clickedBox == -1 )   return 0;
+  if(clickedBox == 0 )   return 2;
+  if(clickedBox == 1 )   return 1;
+  else
+  {
+    return 0;
+  }
+
+}
 int drawer::client_validate_hostname()
 {
   SDL_SetRenderDrawColor(renderer,255,255,255,255);
@@ -474,9 +514,15 @@ int drawer::server_client_connect()
   std::vector<SDL_Rect> boxes;
   boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Cancel", w/10 * 1, h/10 * 9, 100, 100, 100, 255,1));
   boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Start", w/10 * 9, h/10 * 9, 100, 100, 100, 255,1));
-
+  //print connected clients
+  auto client_vector = server->getClientList();
+  for(unsigned int j = 0; j < client_vector.size(); j++ )
+  {
+    TDrawer_small.DrawText(renderer, client_vector[j].nick, w/10 * 0.5, h/10 * 2 + h/20 * j, 100 + j * 10, 200 - j * 10, 100, 255);
+  }
   int clickedBox = e_handler->detectClickInBox(boxes);
   showscreen();
+
 
   if(clickedBox == -1 )   return 0;
   if(clickedBox == 0 )   return 2;

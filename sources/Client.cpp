@@ -69,6 +69,7 @@ void Client::client_thread()
       break;
     }
     pointeroffset = (pointeroffset + num) % sizeof(message);
+    std::cout << pointeroffset << std::endl;
     if (pointeroffset == 0)
     {
       switch(message.type)
@@ -91,6 +92,10 @@ void Client::client_thread()
         case message_type::give_id:
           set_id(message.value);
         break;
+        case message_type::client_list:
+          recieve_client_list(message.value);
+        break;
+
 
       }
     }
@@ -98,6 +103,47 @@ void Client::client_thread()
   close(server_socket);
 }
 
+std::vector<client_info> Client::getClientList()
+{
+  clients_mtx.lock();
+  auto tmp_vec = clients;
+  clients_mtx.unlock();
+  return tmp_vec;
+}
+void Client::recieve_client_list(int len)
+{
+  int pointeroffset = 0;
+  int num = 0;
+  std::cout << len << std::endl;
+  client_info *tmp_info_ptr = (client_info *)malloc(len);
+  do
+  {
+    if ((num = read(server_socket, ((char *)tmp_info_ptr)+pointeroffset, len-pointeroffset))== -1)
+    {
+        perror("recv error");
+        exit(1);
+    }
+    else if(num == 0)
+    { //disconnected
+      connected = false;
+      stop = true;
+      break;
+    }
+    pointeroffset = (pointeroffset + num) % sizeof(len);
+  } while(pointeroffset != 0);
+  clients_mtx.lock();
+  clients.clear();
+  for(unsigned int i = 0; i < len / sizeof(client_info); i++)
+  {
+    if (true /*tmp_info_ptr[i].id != id*/)
+    {
+      clients.push_back(tmp_info_ptr[i]);
+    }
+  }
+  clients_mtx.unlock();
+  std::cout << clients.size() << " clients" << std::endl;
+  free(tmp_info_ptr);
+}
 void Client::set_id(int id_)
 {
   id_mtx.lock();
@@ -108,12 +154,14 @@ void Client::set_id(int id_)
 int Client::send_hello()
 {
   //Send a hello containing the nick
+  write_mtx.lock();
   network_message message = {NEW_CLIENT, hello, (unsigned int)client_settings_.nick_name.size() + 1};
   if (write(server_socket,&message, sizeof(message)) == -1)
   {
     std::cout << "Failure Sending Message" << std::endl;
     stop=true;
     connected = false;
+    write_mtx.unlock();
     return 0;
   }
   if (write(server_socket, client_settings_.nick_name.c_str(), (unsigned int)client_settings_.nick_name.size() + 1) == -1)
@@ -121,7 +169,9 @@ int Client::send_hello()
     std::cout << "Failure Sending Message" << std::endl;
     stop=true;
     connected = false;
+    write_mtx.unlock();
     return 0;
   }
+  write_mtx.unlock();
   return 1;
 }

@@ -1,5 +1,5 @@
 #pragma once
-#include "ClientHandler.h"
+#include "Server.h"
 
 enum class client_state
 {
@@ -20,6 +20,9 @@ struct client_settings
 class Client
 {
   private:
+		std::mutex write_mtx;
+		std::vector<client_info> clients;
+		std::mutex clients_mtx;
     sockaddr_in server_addr;
     int server_socket;
     std::thread client_thread_handle;
@@ -29,7 +32,9 @@ class Client
 		bool connected = false;
 		std::mutex id_mtx;
 		void set_id(int);
+		void recieve_client_list(int);
   public:
+		std::vector<client_info> getClientList();
     void client_thread();
     Client(client_settings settings);
     ~Client();

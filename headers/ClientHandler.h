@@ -5,8 +5,16 @@
 #include <sys/socket.h>
 #include <thread>
 #include <mutex>
+#include <vector>
 
 #define NEW_CLIENT -1
+
+struct client_info
+{
+	char nick[100];
+	int id;
+};
+
 
 enum message_type
 {
@@ -16,6 +24,8 @@ enum message_type
 	i_have_card,
   give_id,
 	hello,
+	client_list,
+
 
 };
 
@@ -29,21 +39,28 @@ struct network_message
 class ClientHandler
 {
   private:
+		 std::mutex write_mtx;
+
      int client_socket;
      socklen_t size;
      struct sockaddr_in client_addr;
      std::thread client_thread_handle;
      bool connected = 0;
      bool ready = 0;
-     int id;
      bool stop = false;
      std::string nick;
      std::mutex nick_mtx;
      bool handle_hello(network_message);
      bool send_id();
+		 void disconnected();
+		 void *server_ptr;
+		 void connection_start();
   public:
+		void send_clientlist(std::vector<client_info> &client_list);
+		std::string getNick();
+		int id;
     void client_handler_thread();
-    ClientHandler(int id_, int client_socket_, struct sockaddr_in client_addr_);
+    ClientHandler(int id_, int client_socket_, struct sockaddr_in client_addr_, void *);
     bool isReady();
     bool isConnected();
     void disconnect();
