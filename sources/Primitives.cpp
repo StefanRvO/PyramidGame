@@ -83,3 +83,15 @@ void SDL_RenderDrawThickLine(SDL_Renderer* renderer, //crude hack to avoid thick
     }
 
 }
+
+void SDL_DrawCrossBox(SDL_Renderer* renderer, SDL_Rect rect, bool state)
+{
+  SDL_RenderDrawRect(renderer, &rect);
+  if(state)
+    {
+      SDL_RenderDrawLine(renderer, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+      SDL_RenderDrawLine(renderer, rect.x, rect.y + rect.h, rect.x + rect.w, rect.y);
+
+    }
+
+}

@@ -7,6 +7,11 @@ Deck::Deck()
 
 Deck::~Deck()
 {
+}
+
+void Deck::resetDeck()
+{
+  cards_in_deck.clear();
   for(uint8_t i = 0; i < 4; i++)
   {
     for(int8_t j = 1; j < 14; j++)
@@ -15,17 +20,14 @@ Deck::~Deck()
       this_card.color = i;
       this_card.value = j;
       cards_in_deck.push_back(this_card);
-
     }
   }
   cards_not_in_deck.clear();
 }
-
 Card Deck::GetCard()
 {
   Card return_card = cards_in_deck.front();
   cards_in_deck.pop_front();
-  cards_not_in_deck.push_back(return_card);
   return return_card;
 }
 

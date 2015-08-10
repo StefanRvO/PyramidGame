@@ -6,35 +6,9 @@
 #include <thread>
 #include <mutex>
 #include <vector>
-
+#include "structs.h"
 #define NEW_CLIENT -1
 
-struct client_info
-{
-	char nick[100];
-	int id;
-};
-
-
-enum message_type
-{
-	new_card,
-	accepted,
-	denied,
-	i_have_card,
-  give_id,
-	hello,
-	client_list,
-
-
-};
-
-struct network_message
-{
-  int origin; //where is this message from? clients have numbers 1.., server is 0, new client is -1
-  message_type type; //message type
-  unsigned int value; //indicates the lenght of the following message
-};
 
 class ClientHandler
 {
@@ -55,6 +29,7 @@ class ClientHandler
 		 void disconnected();
 		 void *server_ptr;
 		 void connection_start();
+		 void handle_ready_set(int ready_);
   public:
 		void send_clientlist(std::vector<client_info> &client_list);
 		std::string getNick();
@@ -65,6 +40,9 @@ class ClientHandler
     bool isConnected();
     void disconnect();
     std::string &GetNick();
+		void send_state_update(client_state state_);
+		void giveCard(Card card);
+
 };
 
 void client_handler_thread_wrapper(ClientHandler *CHandler);

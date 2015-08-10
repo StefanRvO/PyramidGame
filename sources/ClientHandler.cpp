@@ -86,6 +86,12 @@ void ClientHandler::client_handler_thread()
         case message_type::client_list:
 
         break;
+        case message_type::set_ready:
+          handle_ready_set(message.value);
+        break;
+        case message_type::state_update:
+
+        break;
       }
     }
   }
@@ -155,6 +161,19 @@ void ClientHandler::send_clientlist(std::vector<client_info> &client_list)
   write_mtx.unlock();
 }
 
+void ClientHandler::send_state_update(client_state state_)
+{
+  write_mtx.lock();
+  network_message message;
+  message.origin = SERVER;
+  message.type = message_type::state_update;
+  message.value = (unsigned int)state_;
+  if ((write(client_socket, &message, sizeof(network_message)) == -1))
+  {
+    disconnected();
+  }
+  write_mtx.unlock();
+}
 void client_handler_thread_wrapper(ClientHandler *CHandler)
 {
   CHandler->client_handler_thread();
@@ -172,4 +191,35 @@ std::string ClientHandler::getNick()
   tmp_str = nick;
   nick_mtx.unlock();
   return tmp_str;
+}
+
+void ClientHandler::handle_ready_set(int ready_)
+{
+  ready = ready_;
+  ((Server *)server_ptr)->send_clientlist();
+}
+
+bool ClientHandler::isReady()
+{
+  return ready;
+}
+void ClientHandler::giveCard(Card card)
+{
+  std::cout << "send card to client " << (int)card.color << "  " << (int)card.value << std::endl;
+  write_mtx.lock();
+  network_message message;
+  message.origin = SERVER;
+  message.type = message_type::new_card;
+  message.value = sizeof(Card);
+  if ((write(client_socket, &message, sizeof(network_message)) == -1))
+  {
+    disconnected();
+  }
+  if ((write(client_socket, &card, sizeof(Card)) == -1))
+  {
+    disconnected();
+  }
+
+  write_mtx.unlock();
+
 }

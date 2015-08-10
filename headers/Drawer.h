@@ -33,6 +33,7 @@ enum class server_menu_state
 {
   select_options,
   client_connect,
+	game_in_progress,
 };
 
 enum class client_menu_state
@@ -68,6 +69,8 @@ class drawer
 		int client_select_options();
 		int client_connected();
     void showscreen();
+		int client_waiting_for_other_clients();
+		int server_game_in_progress();
   public:
     drawer();
     ~drawer();

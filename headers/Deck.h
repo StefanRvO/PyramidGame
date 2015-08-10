@@ -2,20 +2,10 @@
 //Maintain a deck of cards and which cards is and isn't in the deck.
 #include <deque>
 #include <cstdint>
-#define JACK 11
-#define QUEEN 12
-#define KING 13
+#include "structs.h"
 
-#define HEARTS 0
-#define TILES 1
-#define CLOVERS 2
-#define PIKES 3
 
-struct Card
-{
-  uint8_t color;
-  uint8_t value;
-};
+
 
 
 class Deck

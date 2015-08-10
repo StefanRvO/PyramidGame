@@ -17,3 +17,5 @@ void SDL_Draw_Arrow(SDL_Renderer* renderer, //crude hack to avoid thickLineRGBA
                        int           arrowHeight,
                        int           arrowWidth,
                        int           width);
+
+void SDL_DrawCrossBox(SDL_Renderer* renderer, SDL_Rect rect, bool state);

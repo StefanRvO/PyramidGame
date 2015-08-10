@@ -69,7 +69,6 @@ void Client::client_thread()
       break;
     }
     pointeroffset = (pointeroffset + num) % sizeof(message);
-    std::cout << pointeroffset << std::endl;
     if (pointeroffset == 0)
     {
       switch(message.type)
@@ -78,7 +77,7 @@ void Client::client_thread()
 
         break;
         case message_type::new_card:
-
+          handle_new_card();
         break;
         case message_type::accepted:
 
@@ -91,9 +90,17 @@ void Client::client_thread()
         break;
         case message_type::give_id:
           set_id(message.value);
+          connected = true;
+          state = client_state::waiting_for_start;
         break;
         case message_type::client_list:
           recieve_client_list(message.value);
+        break;
+        case message_type::set_ready:
+
+        break;
+        case message_type::state_update:
+          handle_state_update(message.value);
         break;
 
 
@@ -114,7 +121,6 @@ void Client::recieve_client_list(int len)
 {
   int pointeroffset = 0;
   int num = 0;
-  std::cout << len << std::endl;
   client_info *tmp_info_ptr = (client_info *)malloc(len);
   do
   {
@@ -129,7 +135,7 @@ void Client::recieve_client_list(int len)
       stop = true;
       break;
     }
-    pointeroffset = (pointeroffset + num) % sizeof(len);
+    pointeroffset = (pointeroffset + num) % len;
   } while(pointeroffset != 0);
   clients_mtx.lock();
   clients.clear();
@@ -141,7 +147,6 @@ void Client::recieve_client_list(int len)
     }
   }
   clients_mtx.unlock();
-  std::cout << clients.size() << " clients" << std::endl;
   free(tmp_info_ptr);
 }
 void Client::set_id(int id_)
@@ -159,7 +164,7 @@ int Client::send_hello()
   if (write(server_socket,&message, sizeof(message)) == -1)
   {
     std::cout << "Failure Sending Message" << std::endl;
-    stop=true;
+    stop = true;
     connected = false;
     write_mtx.unlock();
     return 0;
@@ -167,11 +172,109 @@ int Client::send_hello()
   if (write(server_socket, client_settings_.nick_name.c_str(), (unsigned int)client_settings_.nick_name.size() + 1) == -1)
   {
     std::cout << "Failure Sending Message" << std::endl;
-    stop=true;
+    stop = true;
     connected = false;
     write_mtx.unlock();
     return 0;
   }
   write_mtx.unlock();
   return 1;
+}
+
+void Client::set_ready(bool ready_val)
+{
+  if(ready == ready_val) return;
+  write_mtx.lock();
+  network_message message = {id, message_type::set_ready, ready_val};
+
+  write_mtx.unlock();
+  if (write(server_socket,&message, sizeof(message)) == -1)
+  {
+    std::cout << "Failure Sending Message" << std::endl;
+    stop = true;
+    connected = false;
+  }
+  ready = ready_val;
+  write_mtx.unlock();
+}
+
+
+bool Client::isReady()
+{
+  return ready;
+}
+
+client_state Client::getState()
+{
+  return state;
+}
+
+void Client::set_state(client_state state_)
+{
+  state = state_;
+}
+
+bool Client::isConnected()
+{
+  return connected;
+}
+
+void Client::handle_state_update(unsigned int state_)
+{
+  std::cout << "updated state to " << state_ << std::endl;;
+  state =(client_state)state_;
+}
+
+void Client::handle_new_card()
+{
+
+  int pointeroffset = 0;
+  int num = 0;
+  Card card;
+  do
+  {
+    if ((num = read(server_socket, ((char *)&card)+pointeroffset, sizeof(Card)-pointeroffset))== -1)
+    {
+        perror("recv error");
+        exit(1);
+    }
+    else if(num == 0)
+    { //disconnected
+      connected = false;
+      stop = true;
+      break;
+    }
+    pointeroffset = (pointeroffset + num) % sizeof(Card);
+  } while(pointeroffset != 0);
+  PlayerCard Pcard;
+  Pcard.card = card;
+  Pcard.shown = true;
+  insertcard(Pcard);
+}
+void Client::insertcard(PlayerCard card)
+{
+  std::cout << "started to insert " << (int)card.card.color << "  " << (int)card.card.value << std::endl;
+  int i = 1;
+  bool found = false;
+  while(!found)
+  {
+    found = true;
+    for(auto &cur_card : cards)
+    {
+      if(cur_card.number == i)
+      {
+        found = false;
+        break;
+      }
+    }
+    i++;
+  }
+  std::cout << "inserted " << (int)card.card.color << "  " << (int)card.card.value << std::endl;
+  card.number = i;
+  cards.push_back(card);
+}
+void Client::hideCards()
+{
+  for(auto &card : cards)
+    card.shown = false;
 }

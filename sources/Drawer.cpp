@@ -53,8 +53,6 @@ drawer::drawer()
     SDL_Quit();
     std::cout << "SDL error in PNG module!" << std::endl;
   }
-
-
   e_handler = new EventHandler(window, renderer, &stop, (void *)this);
 
 }
@@ -154,7 +152,19 @@ int drawer::client_menu()
         client = new Client(client_settings_);
         if(client->send_hello())
         {
-          client_menu_state_ = client_menu_state::connected;
+          int time_waited = 0;
+          while(!client->isConnected())
+          {
+            time_waited += 5;
+            usleep(5000);
+            if(time_waited > 10000)
+            {
+              client_menu_state_ = client_menu_state::select_options;
+              delete client;
+            }
+          }
+          if(time_waited <= 10000)
+            client_menu_state_ = client_menu_state::connected;
         }
         else
         {
@@ -179,7 +189,8 @@ int drawer::client_menu()
   }
   return 0;
 }
-int drawer::client_connected()
+
+int drawer::client_waiting_for_other_clients()
 {
   SDL_SetRenderDrawColor(renderer,255,255,255,255);
   SDL_RenderClear(renderer);
@@ -191,25 +202,51 @@ int drawer::client_connected()
 
   std::vector<SDL_Rect> boxes;
   boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Cancel", w/10 * 1, h/10 * 9, 100, 100, 100, 255,1));
-  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Start", w/10 * 9, h/10 * 9, 100, 100, 100, 255,1));
+  auto ready_set_rect = TDrawer_small.DrawTextCenter(renderer, "I am ready: ", w/10 * 8, h/10 * 1, 100, 100, 100, 255);
+  SDL_Rect ready_box;
+  ready_box.x = ready_set_rect.x + ready_set_rect.w + w / 40;
+  ready_box.w = w/30;
+  ready_box.y = ready_set_rect.y;
+  ready_box.h = ready_set_rect.h;
+  SDL_DrawCrossBox(renderer, ready_box, client->isReady());
+  boxes.push_back(ready_box);
   //print connected clients
   auto client_vector = client->getClientList();
   for(unsigned int j = 0; j < client_vector.size(); j++ )
   {
-    TDrawer_small.DrawText(renderer, client_vector[j].nick, w/10 * 0.5, h/10 * 2 + h/20 * j, 100 + j * 10, 200 - j * 10, 100, 255);
+    auto T_rect = TDrawer_small.DrawText(renderer, client_vector[j].nick, w/10 * 0.5, h/10 * 2 + h/20 * j, 100 + j * 10, 200 - j * 10, 100, 255);
+    SDL_Rect ready_rect;
+    ready_rect.x = T_rect.x + T_rect.w + w / 40;
+    ready_rect.w = w/30;
+    ready_rect.y = T_rect.y;
+    ready_rect.h = T_rect.h;
+    SDL_DrawCrossBox(renderer, ready_rect, client_vector[j].ready);
+
   }
   int clickedBox = e_handler->detectClickInBox(boxes);
   showscreen();
 
-
   if(clickedBox == -1 )   return 0;
   if(clickedBox == 0 )   return 2;
-  if(clickedBox == 1 )   return 1;
-  else
-  {
-    return 0;
-  }
+  if(clickedBox == 1) client->set_ready(!client->isReady());
+  return 0;
+}
 
+int drawer::client_connected()
+{
+  if(!client->isConnected()) return 2;
+  switch(client->getState())
+  {
+    case client_state::waiting_for_start:
+      client_waiting_for_other_clients();
+    break;
+
+    case client_state::get_cards:
+    case client_state::game:
+    case client_state::guess_cards:
+    break;
+  }
+  return 0;
 }
 int drawer::client_validate_hostname()
 {
@@ -375,7 +412,22 @@ int drawer::server_menu()
       {
         auto decision = server_client_connect();
         if(decision == 1) // forward
-          return 1;
+        {
+          server_menu_state_ = server_menu_state::game_in_progress;
+          server->setState(server_state::deal_cards);
+        }
+        else if(decision == 2) // backward
+        {
+          server_menu_state_ = server_menu_state::select_options;
+          delete server;
+        }
+        break;
+      }
+      case server_menu_state::game_in_progress:
+      {
+        auto decision = server_game_in_progress();
+        if(decision == 1) // forward
+          {}
         else if(decision == 2) // backward
         {
           server_menu_state_ = server_menu_state::select_options;
@@ -388,6 +440,42 @@ int drawer::server_menu()
   return 0;
 }
 
+int drawer::server_game_in_progress()
+{
+  switch(server->getState())
+  {
+    case server_state::get_clients:
+      //nothing to show here.. handled elsewhere
+    break;
+
+    case server_state::deal_cards:
+    //nothing to show here.. handled elsewhere
+
+    break;
+    case server_state::flip_card:
+
+    break;
+    case server_state::give_drinks:
+
+    break;
+    case server_state::trust_drinks:
+
+    break;
+    case server_state::give_new_cards:
+
+    break;
+    case server_state::drink:
+
+    break;
+    case server_state::guess_cards:
+
+    break;
+    case server_state::wait_for_ready_to_flip:
+      //std::cout << "in wait state" << std::endl;
+    break;
+  }
+  return 0;
+}
 
 int drawer::server_select_options()
 {
@@ -511,15 +599,25 @@ int drawer::server_client_connect()
   TDrawer_small.DrawTextCenter(renderer, period_str.c_str(), w/10 * 5, h/10 * 4, 100, 100, 100, 255);
   SDL_SetRenderDrawColor(renderer,127,200,200,255);
 
-  std::vector<SDL_Rect> boxes;
-  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Cancel", w/10 * 1, h/10 * 9, 100, 100, 100, 255,1));
-  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Start", w/10 * 9, h/10 * 9, 100, 100, 100, 255,1));
+  bool allready = true;
   //print connected clients
   auto client_vector = server->getClientList();
   for(unsigned int j = 0; j < client_vector.size(); j++ )
   {
-    TDrawer_small.DrawText(renderer, client_vector[j].nick, w/10 * 0.5, h/10 * 2 + h/20 * j, 100 + j * 10, 200 - j * 10, 100, 255);
+    auto T_rect = TDrawer_small.DrawText(renderer, client_vector[j].nick, w/10 * 0.5, h/10 * 2 + h/20 * j, 100 + j * 10, 200 - j * 10, 100, 255);
+    SDL_Rect ready_rect;
+    ready_rect.x = T_rect.x + T_rect.w + w / 40;
+    ready_rect.w = w/30;
+    ready_rect.y = T_rect.y;
+    ready_rect.h = T_rect.h;
+    if(!client_vector[j].ready) allready = false;
+    SDL_DrawCrossBox(renderer, ready_rect, client_vector[j].ready);
   }
+
+  std::vector<SDL_Rect> boxes;
+  boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Cancel", w/10 * 1, h/10 * 9, 100, 100, 100, 255,1));
+  if(allready && client_vector.size() >= 2)
+    boxes.push_back(TDrawer_small.DrawTextCenter(renderer, "Start", w/10 * 9, h/10 * 9, 100, 100, 100, 255,1));
   int clickedBox = e_handler->detectClickInBox(boxes);
   showscreen();
 

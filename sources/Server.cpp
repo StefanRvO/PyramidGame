@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <algorithm>
+#include "../headers/Client.h"
 #define BACKLOG 100
 
 bool client_info_sort( client_info &ci_1, client_info &ci_2)
@@ -58,14 +59,18 @@ void Server::server_thread()
 {
   while(!stop)
   {
-    switch(server_state_)
+    switch(getState())
     {
       case server_state::get_clients:
       connect_client();
       break;
 
       case server_state::deal_cards:
-
+      std::cout << "creating pyramid" << std::endl;
+      game = new PyramidGame(server_settings_.percent_flipped, clients.size(), server_settings_.base_size);
+      std::cout << "Pyramid created" << std::endl;
+      deal_cards();
+      server_state_ = server_state::wait_for_ready_to_flip;
       break;
       case server_state::flip_card:
 
@@ -85,6 +90,9 @@ void Server::server_thread()
       case server_state::guess_cards:
 
       break;
+      case server_state::wait_for_ready_to_flip:
+
+      break;
     }
   }
 }
@@ -94,9 +102,11 @@ void Server::connect_client()
   fd_set rfds;
   FD_ZERO(&rfds);
   FD_SET(server_socket, &rfds);
+  struct timeval tv;
+  tv.tv_usec = 10000;
+  tv.tv_sec = 0;
 
-
-  int retval = select(server_socket + 1, &rfds, NULL, NULL, NULL);
+  int retval = select(server_socket + 1, &rfds, NULL, NULL, &tv);
   if(retval == -1)
   {
     std::cout << "Error in select()" << std::endl;
@@ -129,6 +139,7 @@ std::vector<client_info> Server::getClientList()
       strncpy(tmp.nick, client->getNick().c_str(), sizeof(tmp.nick));
       tmp.id = client->id;
       tmp.nick[sizeof(tmp.nick) - 1] = '\0';
+      tmp.ready = client->isReady();
       client_list.push_back(tmp);
     }
   }
@@ -149,4 +160,31 @@ void Server::send_clientlist()
     }
   }
   clients_mtx.unlock();
+}
+
+server_state Server::getState()
+{
+  return server_state_;
+}
+void Server::setState(server_state state_)
+{
+  server_state_ = state_;
+}
+
+void Server::deal_cards()
+{
+  send_state_update(client_state::get_cards);
+  for(auto client : clients)
+  {
+    for(int i = 0; i < 4; i++)
+      client->giveCard(game->getCard());
+  }
+}
+
+void Server::send_state_update(client_state state_)
+{
+  for(auto client : clients)
+  {
+    client->send_state_update(state_);
+  }
 }
